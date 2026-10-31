@@ -1,0 +1,17 @@
+{
+  "start": {
+    "sounds": [ { "name": "clouded:start", "stream": true } ]
+  },
+  "phase_1": {
+    "sounds": [ { "name": "clouded:phase1", "stream": true } ]
+  },
+  "phase_2": {
+    "sounds": [ { "name": "clouded:phase2", "stream": true } ]
+  },
+  "phase_3": {
+    "sounds": [ { "name": "clouded:phase3", "stream": true } ]
+  },
+  "outro": {
+    "sounds": [ { "name": "clouded:outro", "stream": true } ]
+  }
+}
