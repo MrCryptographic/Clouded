@@ -8,26 +8,36 @@ import net.minecraft.sounds.SoundSource;
 import net.minecraft.util.RandomSource;
 
 public class MusicManager {
-    // These states tell the game what part of the song is currently playing
     private enum State {
         SILENT, INTRO, PHASE_1, PHASE_2, PHASE_3, OUTRO
     }
 
     private static State currentState = State.SILENT;
     private static ModMusicInstance currentMusicInstance = null;
+    
+    // We use this to detect if you left a world and joined a new server
+    private static LocalPlayer lastPlayer = null; 
 
     public static void tick() {
         Minecraft mc = Minecraft.getInstance();
         LocalPlayer player = mc.player;
 
-        if (player == null || mc.isPaused()) return;
+        // 1. Detect if we left a server or joined a new one
+        if (player == null) {
+            resetEngine(mc);
+            return;
+        }
+        if (player != lastPlayer) {
+            resetEngine(mc);
+            lastPlayer = player; // Lock onto the new player object
+        }
+
+        if (mc.isPaused()) return;
 
         float maxHealth = player.getMaxHealth();
         float currentHealth = player.getHealth();
         
-        // Target Phase (0 = Full Health, 1-3 = Danger Levels)
         int targetPhaseNumber = 0; 
-        
         if (currentHealth < maxHealth && currentHealth > 0) {
             if (currentHealth > maxHealth * 0.66f) {
                 targetPhaseNumber = 1;
@@ -42,18 +52,16 @@ public class MusicManager {
         switch (currentState) {
             case SILENT:
                 if (targetPhaseNumber > 0) {
-                    playTrack(mc, CloudedSounds.START, false); // Play Intro (No loop)
+                    playTrack(mc, CloudedSounds.START, false);
                     currentState = State.INTRO;
                 }
                 break;
                 
             case INTRO:
                 if (targetPhaseNumber == 0) {
-                    // Player healed to full before intro even finished
                     playTrack(mc, CloudedSounds.OUTRO, false);
                     currentState = State.OUTRO;
                 } else if (currentMusicInstance == null || !mc.getSoundManager().isActive(currentMusicInstance)) {
-                    // The intro track finished! Seamlessly start looping the correct phase.
                     startPhaseLoop(mc, targetPhaseNumber);
                 }
                 break;
@@ -62,11 +70,9 @@ public class MusicManager {
             case PHASE_2:
             case PHASE_3:
                 if (targetPhaseNumber == 0) {
-                    // Player healed back to full! Stop looping and play Outro.
-                    playTrack(mc, CloudedSounds.OUTRO, false); // Play Outro (No loop)
+                    playTrack(mc, CloudedSounds.OUTRO, false);
                     currentState = State.OUTRO;
                 } else {
-                    // Check if player took more damage and shifted to a worse phase
                     int currentPhaseNumber = switch (currentState) {
                         case PHASE_1 -> 1;
                         case PHASE_2 -> 2;
@@ -76,22 +82,33 @@ public class MusicManager {
                     
                     if (targetPhaseNumber != currentPhaseNumber) {
                         startPhaseLoop(mc, targetPhaseNumber);
+                    } else if (currentMusicInstance != null && !mc.getSoundManager().isActive(currentMusicInstance)) {
+                        // Failsafe: If the server aggressively killed our loop, restart it instantly!
+                        startPhaseLoop(mc, targetPhaseNumber);
                     }
                 }
                 break;
                 
             case OUTRO:
                 if (targetPhaseNumber > 0) {
-                    // Player took damage while outro was playing! Cut back to Intro.
                     playTrack(mc, CloudedSounds.START, false);
                     currentState = State.INTRO;
                 } else if (currentMusicInstance == null || !mc.getSoundManager().isActive(currentMusicInstance)) {
-                    // Outro finished naturally. Return to peace and quiet.
                     currentState = State.SILENT;
                     currentMusicInstance = null;
                 }
                 break;
         }
+    }
+
+    // Completely resets the audio when world-hopping
+    private static void resetEngine(Minecraft mc) {
+        currentState = State.SILENT;
+        if (currentMusicInstance != null) {
+            mc.getSoundManager().stop(currentMusicInstance);
+            currentMusicInstance = null;
+        }
+        lastPlayer = null;
     }
 
     private static void startPhaseLoop(Minecraft mc, int phase) {
@@ -102,7 +119,7 @@ public class MusicManager {
             default -> CloudedSounds.PHASE_1;
         };
         
-        playTrack(mc, event, true); // True = Loop forever
+        playTrack(mc, event, true);
         
         currentState = switch (phase) {
             case 1 -> State.PHASE_1;
@@ -120,8 +137,6 @@ public class MusicManager {
         mc.getSoundManager().play(currentMusicInstance);
     }
 
-    // --- Custom Sound Instance Class ---
-    // This allows us to forcefully tell Minecraft to loop the track forever!
     private static class ModMusicInstance extends AbstractTickableSoundInstance {
         public ModMusicInstance(SoundEvent sound, boolean loop) {
             super(sound, SoundSource.RECORDS, RandomSource.create());
@@ -129,12 +144,15 @@ public class MusicManager {
             this.delay = 0;
             this.volume = 1.0F;
             this.pitch = 1.0F;
-            this.relative = true; // Plays exactly in your ears regardless of where you look
+            this.relative = true; 
+            // Setting position to 0 ensures compatibility with server-based spatial audio
+            this.x = 0;
+            this.y = 0;
+            this.z = 0;
         }
 
         @Override
         public void tick() {
-            // Keep ticking in the background
         }
     }
 }

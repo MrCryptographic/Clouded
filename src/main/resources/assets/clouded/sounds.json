@@ -12,6 +12,6 @@
     "sounds": [ { "name": "clouded:phase3", "stream": true } ]
   },
   "outro": {
-    "sounds": [ { "name": "clouded:outro", "stream": true } ]
+    "sounds": [ { "name": "clouded:end", "stream": true } ]
   }
 }
